@@ -3,23 +3,42 @@ const async = require('async')
 const cheerio = require('cheerio')
 
 let browser
+let page
+
 const toDate = (s) => {
   // da formato a las fechas entregadas por el atril
   return new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{2})/,'$2/$1/$3'));
 }
 
+async function retry(maxRetries, fn) {
+  let result 
+  try{ 
+    result = await fn()
+  } catch (e) {
+    console.info('retry...')
+      if (maxRetries <= 0) {
+        throw e
+      }
+      return retry(maxRetries - 1, fn)
+    }
+    return result
+}
+
 const requestArchivo = async (cps, callback) => {
+  console.group('contrato numero %d ', cps.numero_contrato)
   
   try {
-    const page = await browser.newPage()
-    await page.goto('http://contratos.bucaramanga.gov.co/')
-    await page.evaluate((numeroContrato, objetoContrato) => {
-      document.querySelector('#cph_contratos_txtNroContrato').value = numeroContrato
-      document.querySelector('#cph_contratos_ddlVigFiscal').value = '2018'
-    }, cps.numero_contrato, cps.objeto_contrato)  
-    await page.click('#cph_contratos_btnFiltro')
+    const inner_html = await retry(5, async () => {
+      await page.goto('http://contratos.bucaramanga.gov.co/')
+      await page.evaluate((numeroContrato, objetoContrato) => {
+        document.querySelector('#cph_contratos_txtNroContrato').value = numeroContrato
+        document.querySelector('#cph_contratos_ddlVigFiscal').value = '2018'
+      }, cps.numero_contrato, cps.objeto_contrato)  
+      await page.click('#cph_contratos_btnFiltro')
+      
+      return '<table>' + (await page.evaluate(() => document.querySelector('#dataTables-example').innerHTML)) + '</table>'
+    }) 
     
-    const inner_html = '<table>' + (await page.evaluate(() => document.querySelector('#dataTables-example').innerHTML)) + '</table>'
     const $ = cheerio.load(inner_html, { normalizeWhitespace: true })
     const trs = $('tbody tr')
     
@@ -49,34 +68,34 @@ const requestArchivo = async (cps, callback) => {
       })
     
     }
-    // await page.screenshot({ path: 'output.png', fullPage: true })
-    await page.close()
-  } catch (e) {
-    console.error(e)
-      
-  }
 
-  console.group('contrato numero %d ', cps.numero_contrato)
+    // await page.screenshot({ path: 'output.png', fullPage: true })
+    
+  } catch (e) {
+    console.log('big')
+    console.error(e)
+  }
+  
   console.info('Encontrados: %d', data.length); console.groupEnd() 
   return data.length === 0 ? null : data
 }
 
 module.exports = async (data) => {
   console.info('............Descargando procesos de Archivo de la alcaldia de bucaramanga..............')
-
+  
   browser = await puppeteer.launch()
+  page = await browser.newPage()
   console.group()
   return new Promise((resolve, reject) => {
-    async.mapLimit(data, 1, requestArchivo, (err, results) => {
+    async.mapSeries(data, requestArchivo, (err, results) => {
+    
       console.groupEnd()
+      
       browser.close()
       if (err) return console.log(err)
       console.info(`\nBuscados ${results.length}`)
       console.info(`Encontrados ${results.reduce((a, c) => c !== null ? a + 1 : a, 0)} \n`)
       resolve(results.map((r, i) => ({ ...data[i], archivo: r })))
-      
-
-      // fs.writeFile('./cps_el_atril_ssecopi_ssecopii_archivo.json', JSON.stringify(result, null, 2), (err) => { if (err) console.log(err) })
     })
   })
 }
