@@ -1,0 +1,19 @@
+{
+  "name": "linkssecop",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "afbayoanc",
+  "dependencies": {
+    "async": "^3.1.0",
+    "axios": "^0.19.0",
+    "cheerio": "^1.0.0-rc.3",
+    "cherio": "^1.0.0-rc.2",
+    "form-data": "^3.0.0",
+    "puppeteer": "^2.0.0"
+  },
+  "license": "ISC"
+}
