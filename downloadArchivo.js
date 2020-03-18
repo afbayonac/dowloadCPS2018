@@ -27,8 +27,9 @@ async function retry(maxRetries, fn) {
 const requestArchivo = async (cps, callback) => {
   console.group('contrato numero %d ', cps.numero_contrato)
   
+  let data = []
   try {
-    const inner_html = await retry(5, async () => {
+    const inner_html = await retry(10, async () => {
       await page.goto('http://contratos.bucaramanga.gov.co/')
       await page.evaluate((numeroContrato, objetoContrato) => {
         document.querySelector('#cph_contratos_txtNroContrato').value = numeroContrato
@@ -42,11 +43,10 @@ const requestArchivo = async (cps, callback) => {
     const $ = cheerio.load(inner_html, { normalizeWhitespace: true })
     const trs = $('tbody tr')
     
-    data = []
     for(let i = 0; i < trs.length; i++) {
       tr = trs[i]
       if (toDate(tr.children[13].children[0].data).getDate() !== cps.fecha_inicio.getDate() ) continue
-      if (toDate(tr.children[15].children[0].data).getDate() !== cps.fecha_terminacion.getDate() ) continue
+      if (cps.fecha_terminacion && toDate(tr.children[15].children[0].data).getDate() !== cps.fecha_terminacion.getDate() ) continue
       
       const href = tr.children[19].children[0].attribs.href
       await page.goto(`http://contratos.bucaramanga.gov.co/${href}`)
@@ -55,7 +55,7 @@ const requestArchivo = async (cps, callback) => {
       const inputs = $('.input-group')
       
       data.push({
-        identificaicon: inputs[2].children[0].children[0].data,
+        identificacion: inputs[2].children[0].children[0].data,
         contratista: inputs[3].children[0].children[0].data,
         tipoDeContrato: inputs[4].children[0].children[0].data,
         estado: inputs[5].children[0].children[0].data,
@@ -64,7 +64,8 @@ const requestArchivo = async (cps, callback) => {
         duracion: inputs[10].children[0].children[0].data,
         oficinaGestora: inputs[11].children[0].children[0].data,
         supervisor: inputs[12].children[0].children[0].data,
-        urlSECOP: inputs[13].children[0].children[0].data
+        urlSECOP: inputs[13].children[0].children[0].data,
+        urlArchivo: `http://contratos.bucaramanga.gov.co/${href}`
       })
     
     }
